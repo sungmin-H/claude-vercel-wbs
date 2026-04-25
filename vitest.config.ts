@@ -8,6 +8,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     passWithNoTests: true,
+    exclude: ['e2e/**', 'node_modules/**'],
   },
   resolve: {
     alias: { '@': path.resolve(__dirname, '.') },

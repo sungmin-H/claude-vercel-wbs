@@ -21,3 +21,21 @@ export const tasks = pgTable(
     progressCheck: check('tasks_progress_check', sql`${t.progress} between 0 and 100`),
   })
 );
+
+export const deliverables = pgTable(
+  'deliverables',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    type: text('type').notNull().default('other'), // doc|design|code|spec|data|other
+    status: text('status').notNull().default('pending'), // pending|in-progress|done
+    link: text('link'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    typeCheck: check('deliverables_type_check', sql`${t.type} in ('doc','design','code','spec','data','other')`),
+    statusCheck: check('deliverables_status_check', sql`${t.status} in ('pending','in-progress','done')`),
+  })
+);

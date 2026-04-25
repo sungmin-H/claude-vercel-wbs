@@ -270,6 +270,7 @@ export default defineConfig({
 |---|---|
 | `/setup-dev-environment` | 로컬 의존성 진단 + 설치/가입/로그인 가이드 |
 | `/dev-server` | Supabase 컨테이너 + Next.js 개발 서버 기동 |
+| `/design-system` | **UI 작업 전 필수 실행** — 원본 디자인 파일(`WBS Design Standalone.html`)과 기존 구현 컴포넌트를 읽어 시각 언어를 파악한 뒤 작업한다 |
 
 ### 프로젝트 MCP (`.mcp.json`)
 
