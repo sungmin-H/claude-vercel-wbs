@@ -8,6 +8,13 @@
       "when": 1777118651813,
       "tag": "0000_smiling_micromacro",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777123694974,
+      "tag": "0001_panoramic_klaw",
+      "breakpoints": true
     }
   ]
 }

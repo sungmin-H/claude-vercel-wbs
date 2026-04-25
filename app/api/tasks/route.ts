@@ -1,12 +1,22 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { tasks } from '@/lib/db/schema';
+import { tasks, deliverables } from '@/lib/db/schema';
 import { asc } from 'drizzle-orm';
 
 export async function GET() {
   try {
-    const rows = await db.select().from(tasks).orderBy(asc(tasks.createdAt));
-    return NextResponse.json(rows);
+    const [taskRows, deliverableRows] = await Promise.all([
+      db.select().from(tasks).orderBy(asc(tasks.createdAt)),
+      db.select().from(deliverables).orderBy(asc(deliverables.createdAt)),
+    ]);
+    const delivMap = new Map<string, typeof deliverableRows>();
+    for (const d of deliverableRows) {
+      const arr = delivMap.get(d.taskId) ?? [];
+      arr.push(d);
+      delivMap.set(d.taskId, arr);
+    }
+    const result = taskRows.map((t) => ({ ...t, deliverables: delivMap.get(t.id) ?? [] }));
+    return NextResponse.json(result);
   } catch {
     return NextResponse.json({ error: 'Failed to fetch tasks' }, { status: 500 });
   }
