@@ -9,28 +9,30 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
-    "next": "^14.2.29",
-    "react": "^18",
-    "react-dom": "^18",
     "@chakra-ui/react": "^3",
     "@emotion/react": "^11",
+    "@supabase/supabase-js": "^2",
     "drizzle-orm": "^0.44.2",
+    "next": "^14.2.29",
     "postgres": "^3",
-    "@supabase/supabase-js": "^2"
+    "react": "^18",
+    "react-dom": "^18"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@playwright/test": "^1.59.1",
+    "@testing-library/jest-dom": "^6",
+    "@testing-library/react": "^16",
+    "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "@types/node": "^20",
-    "drizzle-kit": "^0.31.1",
-    "vitest": "^3",
     "@vitejs/plugin-react": "^4",
+    "drizzle-kit": "^0.31.1",
     "jsdom": "^26",
-    "@testing-library/react": "^16",
-    "@testing-library/jest-dom": "^6"
+    "typescript": "^5",
+    "vitest": "^3"
   }
 }
