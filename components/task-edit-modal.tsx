@@ -42,6 +42,7 @@ export function TaskEditModal({ task, allTasks, open, onClose, onSaved }: Props)
   const [startDate, setStartDate] = useState(task.startDate ?? '')
   const [dueDate, setDueDate] = useState(task.dueDate ?? '')
   const [titleError, setTitleError] = useState(false)
+  const [dateError, setDateError] = useState(false)
   const [saving, setSaving] = useState(false)
   const [delivs, setDelivs] = useState<Deliverable[]>(task.deliverables ?? [])
   const parentTask = task.parentId ? allTasks.find(t => t.id === task.parentId) : null
@@ -80,6 +81,7 @@ export function TaskEditModal({ task, allTasks, open, onClose, onSaved }: Props)
 
   const handleSave = async () => {
     if (!title.trim()) { setTitleError(true); return }
+    if (startDate && dueDate && dueDate < startDate) { setDateError(true); return }
     setSaving(true)
     await fetch(`/api/tasks/${task.id}`, {
       method: 'PATCH',
@@ -130,6 +132,7 @@ export function TaskEditModal({ task, allTasks, open, onClose, onSaved }: Props)
             <div>
               <FieldLabel label="제목" en="Title" />
               <input
+                aria-label="제목"
                 style={{ ...inputStyle, borderColor: titleError ? '#DC2626' : '#E2E8F0' }}
                 value={title}
                 onChange={e => { setTitle(e.target.value); setTitleError(false) }}
@@ -207,11 +210,16 @@ export function TaskEditModal({ task, allTasks, open, onClose, onSaved }: Props)
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <FieldLabel label="시작일" en="Start" />
-                <input type="date" style={inputStyle} value={startDate} onChange={e => setStartDate(e.target.value)} />
+                <input aria-label="시작일" type="date" style={inputStyle} value={startDate} onChange={e => { setStartDate(e.target.value); setDateError(false) }} />
               </div>
               <div>
                 <FieldLabel label="목표 기한" en="Due" />
-                <input type="date" style={inputStyle} value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                <input aria-label="목표 기한" type="date" style={inputStyle} value={dueDate} onChange={e => { setDueDate(e.target.value); setDateError(false) }} />
+                {dateError && (
+                  <div style={{ fontSize: '11px', color: '#DC2626', marginTop: '4px' }}>
+                    ⚠ 목표 기한은 시작일 이후여야 합니다
+                  </div>
+                )}
               </div>
             </div>
 
