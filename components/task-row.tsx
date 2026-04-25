@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Box, Flex, Text } from '@chakra-ui/react'
+import { useState, useRef } from 'react'
+import { Box, Flex, Text, Portal } from '@chakra-ui/react'
 import type { Task } from '@/types/task'
 import { TaskDeleteDialog } from '@/components/task-delete-dialog'
 import { DeliverableSummary } from '@/components/deliverables-ui'
@@ -237,14 +237,33 @@ function Avatar({ name }: { name: string | null }) {
   )
 }
 
+const MENU_HEIGHT = 116 // 3 items × ~32px + padding
+
 function RowMenu({ onEdit, onAddChild, onDelete }: {
   onEdit: () => void; onAddChild: () => void; onDelete: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      const openUpward = window.innerHeight - rect.bottom < MENU_HEIGHT + 8
+      setPos({
+        top: openUpward ? rect.top - MENU_HEIGHT - 4 : rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      })
+    }
+    setOpen(v => !v)
+  }
+
   return (
     <Box position="relative">
       <button
-        onClick={e => { e.stopPropagation(); setOpen(v => !v) }}
+        ref={btnRef}
+        onClick={handleToggle}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         style={{
           width: '28px', height: '28px', borderRadius: '6px', border: 'none',
@@ -260,30 +279,34 @@ function RowMenu({ onEdit, onAddChild, onDelete }: {
         </svg>
       </button>
       {open && (
-        <Box
-          position="absolute" right={0} top="32px" zIndex={50}
-          bg="white" borderRadius="8px" border="1px solid #E2E8F0"
-          boxShadow="0 4px 16px rgba(15,23,42,0.12)"
-          py={1} minW="140px"
-        >
-          {[
-            { label: '편집', onClick: () => { setOpen(false); onEdit() }, color: '#0F172A' },
-            { label: '하위 작업 추가', onClick: () => { setOpen(false); onAddChild() }, color: '#0F172A' },
-            { label: '삭제', onClick: () => { setOpen(false); onDelete() }, color: '#DC2626' },
-          ].map(item => (
-            <button
-              key={item.label}
-              onClick={e => { e.stopPropagation(); item.onClick() }}
-              style={{
-                display: 'block', width: '100%', textAlign: 'left',
-                padding: '8px 14px', border: 'none', background: 'transparent',
-                fontSize: '13px', fontWeight: 500, color: item.color, cursor: 'pointer',
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </Box>
+        <Portal>
+          <Box
+            position="fixed"
+            style={{ top: pos.top, right: pos.right }}
+            zIndex={200}
+            bg="white" borderRadius="8px" border="1px solid #E2E8F0"
+            boxShadow="0 4px 16px rgba(15,23,42,0.12)"
+            py={1} minW="140px"
+          >
+            {[
+              { label: '편집', onClick: () => { setOpen(false); onEdit() }, color: '#0F172A' },
+              { label: '하위 작업 추가', onClick: () => { setOpen(false); onAddChild() }, color: '#0F172A' },
+              { label: '삭제', onClick: () => { setOpen(false); onDelete() }, color: '#DC2626' },
+            ].map(item => (
+              <button
+                key={item.label}
+                onClick={e => { e.stopPropagation(); item.onClick() }}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '8px 14px', border: 'none', background: 'transparent',
+                  fontSize: '13px', fontWeight: 500, color: item.color, cursor: 'pointer',
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </Box>
+        </Portal>
       )}
     </Box>
   )
