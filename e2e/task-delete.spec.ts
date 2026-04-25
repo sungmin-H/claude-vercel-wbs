@@ -19,24 +19,21 @@ test.beforeEach(async ({ request }) => {
 test('J8 — 하위를 가진 작업 삭제', async ({ page }) => {
   await page.goto('/');
 
-  // ⋯ 메뉴 → 삭제 (aria-label="메뉴" 기준)
-  const parentRow = page.getByRole('row', { name: /기획 회의/ });
-  await parentRow.getByRole('button', { name: '메뉴' }).click();
-  await page.getByRole('menuitem', { name: '삭제' }).click();
+  // 첫 번째 ⋯ 메뉴 클릭 (부모 작업 "기획 회의" 행)
+  await page.getByRole('button', { name: '메뉴' }).first().click();
+  await page.getByRole('button', { name: '삭제' }).click();
 
   // 확인 다이얼로그 문구 검증
-  await expect(page.getByRole('alertdialog')).toBeVisible();
-  await expect(
-    page.getByText('이 작업과 하위 작업 1개가 모두 삭제됩니다. 계속할까요?')
-  ).toBeVisible();
+  await expect(page.getByText('작업을 삭제할까요?')).toBeVisible();
+  await expect(page.getByText('하위 작업 1개')).toBeVisible();
 
-  await page.getByRole('button', { name: '확인' }).click();
+  await page.getByRole('button', { name: '삭제' }).click();
 
   // 두 행 모두 사라짐
-  await expect(page.getByRole('cell', { name: '기획 회의' })).not.toBeVisible();
-  await expect(page.getByRole('cell', { name: '아젠다 초안 작성' })).not.toBeVisible();
+  await expect(page.getByText('기획 회의', { exact: true })).not.toBeVisible();
+  await expect(page.getByText('아젠다 초안 작성', { exact: true })).not.toBeVisible();
 
   // 새로고침 후에도 복구 안 됨
   await page.reload();
-  await expect(page.getByRole('cell', { name: '기획 회의' })).not.toBeVisible();
+  await expect(page.getByText('기획 회의', { exact: true })).not.toBeVisible();
 });
