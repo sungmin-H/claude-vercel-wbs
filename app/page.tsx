@@ -8,11 +8,13 @@ import { TaskList } from '@/components/task-list'
 import { GanttView } from '@/components/gantt-view'
 import { TaskCreateModal } from '@/components/task-create-modal'
 import { TaskEditModal } from '@/components/task-edit-modal'
-import { CsvImportModal, parseCsvPreview } from '@/components/csv-import-modal'
+import { CsvImportModal } from '@/components/csv-import-modal'
+import { parseCsvPreview, generateCsvContent } from '@/lib/utils/csv'
+import type { PreviewRow } from '@/lib/utils/csv'
 
 interface CsvPreviewData {
   filename: string
-  rows: ReturnType<typeof parseCsvPreview>
+  rows: PreviewRow[]
 }
 
 export default function Home() {
@@ -66,20 +68,7 @@ export default function Home() {
   }
 
   const handleCsvExport = () => {
-    const header = ['제목', '설명', '담당자', '상태', '진행률', '시작일', '목표 기한', '상위 작업 제목']
-    const rows = tasks.map(t => [
-      t.title,
-      t.description ?? '',
-      t.assignee ?? '',
-      t.status,
-      String(t.progress),
-      t.startDate ?? '',
-      t.dueDate ?? '',
-      tasks.find(p => p.id === t.parentId)?.title ?? '',
-    ])
-    const csv = [header, ...rows]
-      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
-      .join('\n')
+    const csv = generateCsvContent(tasks)
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')

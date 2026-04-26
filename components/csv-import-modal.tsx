@@ -2,20 +2,7 @@
 
 import { useState } from 'react'
 import { Box, Flex, Text, Portal } from '@chakra-ui/react'
-import type { Task } from '@/types/task'
-
-interface PreviewRow {
-  ok: 'add' | 'warn' | 'skip'
-  title: string
-  assignee: string
-  status: string
-  progress: number
-  startDate: string | null
-  dueDate: string | null
-  parentId: string | null
-  reason?: string
-  warnMsg?: string
-}
+import type { PreviewRow } from '@/lib/utils/csv'
 
 interface CsvPreviewData {
   filename: string
@@ -51,24 +38,60 @@ export function CsvImportModal({ open, previewData, onClose, onImported }: Props
   const toAdd = rows.filter(r => r.ok !== 'skip')
   const skipCount = rows.filter(r => r.ok === 'skip').length
   const warnCount = rows.filter(r => r.ok === 'warn').length
+  const updateCount = rows.filter(r => r.ok === 'update').length
+  const addCount = toAdd.length - updateCount
+
+  const btnLabel = addCount > 0 && updateCount > 0
+    ? `추가 ${addCount} · 수정 ${updateCount}`
+    : updateCount > 0
+      ? `${updateCount}개 수정`
+      : `${addCount}개 추가`
 
   const handleConfirm = async () => {
     setImporting(true)
+    const idMap = new Map<string, string>()     // csv id → db id (update 행)
+    const titleToId = new Map<string, string>() // 제목 → db id (add 행, 배치 내 부모 해결)
+
     for (const row of toAdd) {
-      await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: row.title,
-          assignee: row.assignee || null,
-          status: row.status || 'todo',
-          progress: row.progress || 0,
-          startDate: row.startDate,
-          dueDate: row.dueDate,
-          parentId: row.parentId,
-        }),
-      })
+      // 부모 해결: 이미 resolve됐으면 그대로, 아니면 배치 내에서 재시도
+      let resolvedParentId: string | null = row.parentId
+      if (!resolvedParentId) {
+        if (row.parentCsvId) {
+          resolvedParentId = idMap.get(row.parentCsvId) ?? null
+        } else if (row.parentTitle) {
+          resolvedParentId = titleToId.get(row.parentTitle) ?? null
+        }
+      }
+
+      const body = {
+        title: row.title,
+        assignee: row.assignee || null,
+        status: row.status || 'todo',
+        progress: row.progress || 0,
+        startDate: row.startDate,
+        dueDate: row.dueDate,
+        parentId: resolvedParentId,
+      }
+
+      if (row.ok === 'update' && row.id) {
+        await fetch(`/api/tasks/${row.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        idMap.set(row.id, row.id)
+        titleToId.set(row.title, row.id)
+      } else {
+        const res = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        const created = await res.json()
+        if (created?.id) titleToId.set(row.title, created.id)
+      }
     }
+
     setImporting(false)
     onImported()
   }
@@ -95,7 +118,8 @@ export function CsvImportModal({ open, previewData, onClose, onImported }: Props
               {filename}
             </Text>
             <Flex gap={2.5} mt={3.5}>
-              <Pill bg="var(--c-accent-soft)" fg="var(--c-accent)" label={`${toAdd.length}개 작업 추가`} />
+              {addCount > 0 && <Pill bg="var(--c-accent-soft)" fg="var(--c-accent)" label={`${addCount}개 작업 추가`} />}
+              {updateCount > 0 && <Pill bg="#EDE9FE" fg="#7C3AED" label={`수정 ${updateCount}건`} />}
               {warnCount > 0 && <Pill bg="#FEF3C7" fg="#B45309" label={`경고 ${warnCount}건`} />}
               {skipCount > 0 && <Pill bg="#FEE2E2" fg="#B91C1C" label={`제외 ${skipCount}건`} />}
             </Flex>
@@ -115,13 +139,14 @@ export function CsvImportModal({ open, previewData, onClose, onImported }: Props
               </thead>
               <tbody>
                 {rows.map((r, i) => {
-                  const tone = r.ok === 'skip' ? '#FEF2F2' : r.ok === 'warn' ? '#FFFBEB' : 'white'
+                  const tone = r.ok === 'skip' ? '#FEF2F2' : r.ok === 'warn' ? '#FFFBEB' : r.ok === 'update' ? '#F5F3FF' : 'white'
                   const dim = r.ok === 'skip'
                   return (
                     <tr key={i} style={{ background: tone }}>
                       <td style={tdStyle}><span style={{ color: '#94A3B8', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span></td>
                       <td style={tdStyle}>
                         {r.ok === 'add' && <Pill mini bg="var(--c-accent-soft)" fg="var(--c-accent)" label="추가" />}
+                        {r.ok === 'update' && <Pill mini bg="#EDE9FE" fg="#7C3AED" label="수정" />}
                         {r.ok === 'warn' && <Pill mini bg="#FEF3C7" fg="#B45309" label="경고" />}
                         {r.ok === 'skip' && <Pill mini bg="#FEE2E2" fg="#B91C1C" label="제외" />}
                       </td>
@@ -144,12 +169,12 @@ export function CsvImportModal({ open, previewData, onClose, onImported }: Props
           {/* Footer */}
           <Flex px="24px" py="16px" borderTop="1px solid #EEF2F6" justifyContent="space-between" alignItems="center">
             <Text style={{ fontSize: '11px', color: '#64748B' }}>
-              ℹ️ 이 작업은 <b>추가만</b> 수행하며, 기존 항목을 수정하지 않습니다.
+              ℹ️ 제목이 같은 작업은 <b>수정</b>, 새 제목은 <b>추가</b>합니다.
             </Text>
             <Flex gap={2}>
               <button onClick={onClose} style={{ padding: '8px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'white', color: '#334155', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>취소</button>
               <button onClick={handleConfirm} disabled={importing || toAdd.length === 0} style={{ padding: '8px 14px', borderRadius: '8px', border: '1px solid var(--c-accent)', background: 'var(--c-accent)', color: 'white', fontSize: '13px', fontWeight: 500, cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.7 : 1 }}>
-                {importing ? '가져오는 중…' : `${toAdd.length}개 추가`}
+                {importing ? '처리 중…' : btnLabel}
               </button>
             </Flex>
           </Flex>
@@ -159,67 +184,4 @@ export function CsvImportModal({ open, previewData, onClose, onImported }: Props
   )
 }
 
-// CSV parsing utility
-export function parseCsvPreview(text: string, existingTasks: Task[]): PreviewRow[] {
-  if (text.startsWith('﻿')) text = text.slice(1)
-
-  const lines = text.split(/\r?\n/).filter(l => l.trim())
-  if (lines.length < 2) return []
-
-  // Skip header row
-  const dataLines = lines.slice(1)
-
-  return dataLines.map((line, i) => {
-    const fields = parseCSVLine(line)
-    const title = fields[0]?.trim() ?? ''
-
-    if (!title) {
-      return { ok: 'skip', title: '', assignee: '', status: 'todo', progress: 0, startDate: null, dueDate: null, parentId: null, reason: `제목 누락 (line ${i + 2})` }
-    }
-
-    const assignee = fields[2]?.trim() ?? ''
-    const statusRaw = fields[3]?.trim() ?? ''
-    const status = ['todo', 'doing', 'done'].includes(statusRaw) ? statusRaw : 'todo'
-    const progressRaw = parseInt(fields[4] ?? '0')
-    const progress = isNaN(progressRaw) ? 0 : Math.max(0, Math.min(100, progressRaw))
-    const startDate = parseDate(fields[5]?.trim())
-    const dueDate = parseDate(fields[6]?.trim())
-    const parentTitle = fields[7]?.trim() ?? ''
-
-    const parent = parentTitle ? existingTasks.find(t => t.title === parentTitle) : null
-    const hasWarn = !!parentTitle && !parent
-
-    return {
-      ok: hasWarn ? 'warn' : 'add',
-      title, assignee, status, progress, startDate, dueDate,
-      parentId: parent?.id ?? null,
-      warnMsg: hasWarn ? '상위 매칭 실패 → 최상위로 처리' : undefined,
-    } satisfies PreviewRow
-  })
-}
-
-function parseCSVLine(line: string): string[] {
-  const result: string[] = []
-  let cur = ''
-  let inQuote = false
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    if (ch === '"') {
-      if (inQuote && line[i + 1] === '"') { cur += '"'; i++ }
-      else inQuote = !inQuote
-    } else if (ch === ',' && !inQuote) {
-      result.push(cur); cur = ''
-    } else {
-      cur += ch
-    }
-  }
-  result.push(cur)
-  return result
-}
-
-function parseDate(s: string | undefined): string | null {
-  if (!s) return null
-  const d = new Date(s)
-  if (isNaN(d.getTime())) return null
-  return s.slice(0, 10)
-}
+export { parseCsvPreview } from '@/lib/utils/csv'
