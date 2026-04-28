@@ -15,6 +15,13 @@
       "when": 1777123694974,
       "tag": "0001_panoramic_klaw",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777334943463,
+      "tag": "0002_certain_fabian_cortez",
+      "breakpoints": true
     }
   ]
 }

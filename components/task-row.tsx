@@ -2,6 +2,8 @@
 
 import { useState, useRef } from 'react'
 import { Box, Flex, Text, Portal } from '@chakra-ui/react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { Task } from '@/types/task'
 import { TaskDeleteDialog } from '@/components/task-delete-dialog'
 import { DeliverableSummary } from '@/components/deliverables-ui'
@@ -48,6 +50,8 @@ export function TaskRow({
   const s = STATUS_MAP[task.status as keyof typeof STATUS_MAP] ?? STATUS_MAP.todo
   const childCount = allTasks.filter(t => t.parentId === task.id).length
 
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
+
   const handleStatusClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
     const newStatus = STATUS_CYCLE[task.status] || 'todo'
@@ -62,8 +66,14 @@ export function TaskRow({
   return (
     <>
       <Box
+        ref={setNodeRef}
         display="grid"
-        style={{ gridTemplateColumns: '1fr 150px 100px 170px 120px 175px 36px' }}
+        style={{
+          gridTemplateColumns: '28px 1fr 150px 100px 170px 120px 175px 36px',
+          transform: CSS.Transform.toString(transform),
+          transition,
+          opacity: isDragging ? 0.5 : 1,
+        }}
         px="18px" py="14px"
         alignItems="center"
         borderBottom="1px solid #F1F5F9"
@@ -72,6 +82,24 @@ export function TaskRow({
         _hover={{ bg: depth > 0 ? '#F8FAFC' : '#FAFBFC' }}
         onClick={onEdit}
       >
+        {/* Drag handle */}
+        <Box
+          {...attributes}
+          {...listeners}
+          onClick={e => e.stopPropagation()}
+          display="flex" alignItems="center" justifyContent="center"
+          w="20px" h="20px" cursor="grab" color="#CBD5E1"
+          style={{ touchAction: 'none' }}
+          _hover={{ color: '#94A3B8' }}
+          title="드래그해서 순서 변경"
+        >
+          <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+            <circle cx="3" cy="2.5" r="1.2"/><circle cx="7" cy="2.5" r="1.2"/>
+            <circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/>
+            <circle cx="3" cy="11.5" r="1.2"/><circle cx="7" cy="11.5" r="1.2"/>
+          </svg>
+        </Box>
+
         {/* Title */}
         <Flex alignItems="center" gap={2} style={{ paddingLeft: depth * 24 }}>
           <Chevron expanded={isExpanded} hasChildren={hasChildren} onToggle={onToggle} />

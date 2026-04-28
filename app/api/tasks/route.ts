@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { tasks, deliverables } from '@/lib/db/schema';
-import { asc } from 'drizzle-orm';
+import { asc, eq, isNull } from 'drizzle-orm';
 
 export async function GET() {
   try {
     const [taskRows, deliverableRows] = await Promise.all([
-      db.select().from(tasks).orderBy(asc(tasks.createdAt)),
+      db.select().from(tasks).orderBy(asc(tasks.order), asc(tasks.createdAt)),
       db.select().from(deliverables).orderBy(asc(deliverables.createdAt)),
     ]);
     const delivMap = new Map<string, typeof deliverableRows>();
@@ -25,6 +25,10 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const parentId = body.parentId ?? null;
+    const siblings = await db.select({ id: tasks.id }).from(tasks).where(
+      parentId === null ? isNull(tasks.parentId) : eq(tasks.parentId, parentId)
+    );
     const [task] = await db
       .insert(tasks)
       .values({
@@ -35,7 +39,8 @@ export async function POST(req: Request) {
         progress: body.progress ?? 0,
         startDate: body.startDate ?? null,
         dueDate: body.dueDate ?? null,
-        parentId: body.parentId ?? null,
+        parentId,
+        order: siblings.length,
       })
       .returning();
     return NextResponse.json(task, { status: 201 });

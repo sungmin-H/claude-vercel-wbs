@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import { Box, Flex, Text } from '@chakra-ui/react'
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import type { DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import type { Task } from '@/types/task'
 import type { TaskNode } from '@/types/task'
 import { buildTree } from '@/lib/utils/tree'
@@ -12,6 +15,7 @@ interface Props {
   onEdit: (task: Task) => void
   onAddChild: (parentId: string) => void
   onRefresh: () => void
+  onReorder: (newTasks: Task[]) => void
 }
 
 type FlatRow = { node: TaskNode; depth: number }
@@ -34,8 +38,10 @@ function isOverdue(task: Task): boolean {
   return new Date(task.dueDate) < today
 }
 
-export function TaskList({ tasks, onEdit, onAddChild, onRefresh }: Props) {
+export function TaskList({ tasks, onEdit, onAddChild, onRefresh, onReorder }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const tree = buildTree(tasks)
   const rows = flattenVisible(tree, collapsed)
@@ -45,6 +51,35 @@ export function TaskList({ tasks, onEdit, onAddChild, onRefresh }: Props) {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
+    })
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const activeTask = tasks.find(t => t.id === active.id)
+    const overTask = tasks.find(t => t.id === over.id)
+    if (!activeTask || !overTask) return
+    if (activeTask.parentId !== overTask.parentId) return
+
+    const siblings = tasks
+      .filter(t => t.parentId === activeTask.parentId)
+      .sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt))
+
+    const oldIdx = siblings.findIndex(t => t.id === active.id)
+    const newIdx = siblings.findIndex(t => t.id === over.id)
+    const reordered = arrayMove(siblings, oldIdx, newIdx)
+
+    const items = reordered.map((t, i) => ({ id: t.id, order: i }))
+    const updatedSiblings = new Map(items.map(({ id, order }) => [id, order]))
+    const newTasks = tasks.map(t => updatedSiblings.has(t.id) ? { ...t, order: updatedSiblings.get(t.id)! } : t)
+    onReorder(newTasks)
+
+    await fetch('/api/tasks/reorder', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
     })
   }
 
@@ -111,11 +146,11 @@ export function TaskList({ tasks, onEdit, onAddChild, onRefresh }: Props) {
           {/* Table header */}
           <Box
             display="grid"
-            style={{ gridTemplateColumns: '1fr 150px 100px 170px 120px 175px 36px' }}
+            style={{ gridTemplateColumns: '28px 1fr 150px 100px 170px 120px 175px 36px' }}
             px="18px" py="12px"
             borderBottom="1px solid #EEF2F6"
           >
-            {['제목 · Title', '담당자', '상태', '진행률', '산출물', '기간', ''].map((h, i) => (
+            {['', '제목 · Title', '담당자', '상태', '진행률', '산출물', '기간', ''].map((h, i) => (
               <Text key={i} style={{
                 fontSize: '11px', fontWeight: 600, color: '#94A3B8',
                 textTransform: 'uppercase', letterSpacing: '0.6px',
@@ -126,20 +161,24 @@ export function TaskList({ tasks, onEdit, onAddChild, onRefresh }: Props) {
           </Box>
 
           {/* Rows */}
-          {rows.map(({ node, depth }) => (
-            <TaskRow
-              key={node.id}
-              task={node}
-              depth={depth}
-              hasChildren={node.children.length > 0}
-              isExpanded={!collapsed.has(node.id)}
-              allTasks={tasks}
-              onToggle={() => toggle(node.id)}
-              onEdit={() => onEdit(node)}
-              onAddChild={() => onAddChild(node.id)}
-              onRefresh={onRefresh}
-            />
-          ))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={rows.map(r => r.node.id)} strategy={verticalListSortingStrategy}>
+              {rows.map(({ node, depth }) => (
+                <TaskRow
+                  key={node.id}
+                  task={node}
+                  depth={depth}
+                  hasChildren={node.children.length > 0}
+                  isExpanded={!collapsed.has(node.id)}
+                  allTasks={tasks}
+                  onToggle={() => toggle(node.id)}
+                  onEdit={() => onEdit(node)}
+                  onAddChild={() => onAddChild(node.id)}
+                  onRefresh={onRefresh}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         </Box>
       </Box>
     </Box>
