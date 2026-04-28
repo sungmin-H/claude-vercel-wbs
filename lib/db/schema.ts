@@ -13,6 +13,7 @@ export const tasks = pgTable(
     progress: integer('progress').notNull().default(0),
     startDate: date('start_date'),
     dueDate: date('due_date'),
+    order: integer('order').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

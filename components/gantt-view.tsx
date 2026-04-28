@@ -2,6 +2,10 @@
 
 import { useState } from 'react'
 import { Box, Flex, Text } from '@chakra-ui/react'
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import type { DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { Task } from '@/types/task'
 import type { TaskNode } from '@/types/task'
 import { buildTree } from '@/lib/utils/tree'
@@ -20,10 +24,12 @@ const DAY_W = 14 // px per day
 
 interface Props {
   tasks: Task[]
+  onReorder: (newTasks: Task[]) => void
 }
 
-export function GanttView({ tasks }: Props) {
+export function GanttView({ tasks, onReorder }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const tree = buildTree(tasks)
   const rows = flattenVisible(tree, collapsed)
@@ -66,6 +72,35 @@ export function GanttView({ tasks }: Props) {
     })
   }
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const activeTask = tasks.find(t => t.id === active.id)
+    const overTask = tasks.find(t => t.id === over.id)
+    if (!activeTask || !overTask) return
+    if (activeTask.parentId !== overTask.parentId) return
+
+    const siblings = tasks
+      .filter(t => t.parentId === activeTask.parentId)
+      .sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt))
+
+    const oldIdx = siblings.findIndex(t => t.id === active.id)
+    const newIdx = siblings.findIndex(t => t.id === over.id)
+    const reordered = arrayMove(siblings, oldIdx, newIdx)
+
+    const items = reordered.map((t, i) => ({ id: t.id, order: i }))
+    const updatedSiblings = new Map(items.map(({ id, order }) => [id, order]))
+    const newTasks = tasks.map(t => updatedSiblings.has(t.id) ? { ...t, order: updatedSiblings.get(t.id)! } : t)
+    onReorder(newTasks)
+
+    await fetch('/api/tasks/reorder', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    })
+  }
+
   return (
     <Box flex={1} overflow="auto">
       {/* Info bar */}
@@ -92,35 +127,20 @@ export function GanttView({ tasks }: Props) {
                   작업 · Task
                 </Text>
               </Box>
-              {rows.map(({ node, depth }, i) => (
-                <Flex
-                  key={node.id}
-                  alignItems="center" gap={2}
-                  px="16px" h="44px"
-                  borderBottom={i < rows.length - 1 ? '1px solid #F8FAFC' : 'none'}
-                  bg={depth > 0 ? '#FCFCFD' : 'white'}
-                  style={{ paddingLeft: `${16 + depth * 18}px` }}
-                >
-                  <GanttChevron
-                    expanded={!collapsed.has(node.id)}
-                    hasChildren={node.children.length > 0}
-                    onToggle={() => toggle(node.id)}
-                  />
-                  <Text
-                    flex={1}
-                    style={{
-                      fontSize: '13px', color: '#0F172A',
-                      fontWeight: depth === 0 ? 600 : 500,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {node.title}
-                  </Text>
-                  <Text style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600, fontVariantNumeric: 'tabular-nums', marginLeft: 'auto' }}>
-                    {node.progress}%
-                  </Text>
-                </Flex>
-              ))}
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={rows.map(r => r.node.id)} strategy={verticalListSortingStrategy}>
+                  {rows.map(({ node, depth }, i) => (
+                    <SortableGanttRow
+                      key={node.id}
+                      node={node}
+                      depth={depth}
+                      isLast={i === rows.length - 1}
+                      collapsed={collapsed}
+                      onToggle={toggle}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
             </Box>
 
             {/* Right: Gantt grid */}
@@ -265,6 +285,62 @@ export function GanttView({ tasks }: Props) {
         </Flex>
       </Box>
     </Box>
+  )
+}
+
+function SortableGanttRow({ node, depth, isLast, collapsed, onToggle }: {
+  node: TaskNode; depth: number; isLast: boolean; collapsed: Set<string>; onToggle: (id: string) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: node.id })
+  return (
+    <Flex
+      ref={setNodeRef}
+      alignItems="center" gap={1}
+      px="16px" h="44px"
+      borderBottom={isLast ? 'none' : '1px solid #F8FAFC'}
+      bg={depth > 0 ? '#FCFCFD' : 'white'}
+      style={{
+        paddingLeft: `${8 + depth * 18}px`,
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
+      {/* Drag handle */}
+      <Box
+        {...attributes}
+        {...listeners}
+        display="flex" alignItems="center" justifyContent="center"
+        w="16px" h="16px" cursor="grab" color="#CBD5E1" flexShrink={0}
+        style={{ touchAction: 'none' }}
+        _hover={{ color: '#94A3B8' }}
+        title="드래그해서 순서 변경"
+      >
+        <svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor">
+          <circle cx="2.5" cy="2" r="1"/><circle cx="5.5" cy="2" r="1"/>
+          <circle cx="2.5" cy="6" r="1"/><circle cx="5.5" cy="6" r="1"/>
+          <circle cx="2.5" cy="10" r="1"/><circle cx="5.5" cy="10" r="1"/>
+        </svg>
+      </Box>
+      <GanttChevron
+        expanded={!collapsed.has(node.id)}
+        hasChildren={node.children.length > 0}
+        onToggle={() => onToggle(node.id)}
+      />
+      <Text
+        flex={1}
+        style={{
+          fontSize: '13px', color: '#0F172A',
+          fontWeight: depth === 0 ? 600 : 500,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}
+      >
+        {node.title}
+      </Text>
+      <Text style={{ fontSize: '11px', color: '#94A3B8', fontWeight: 600, fontVariantNumeric: 'tabular-nums', marginLeft: 'auto' }}>
+        {node.progress}%
+      </Text>
+    </Flex>
   )
 }
 

@@ -67,6 +67,10 @@ export default function Home() {
     fetchTasks()
   }
 
+  const handleReorder = (newTasks: Task[]) => {
+    setTasks(newTasks)
+  }
+
   const handleCsvExport = () => {
     const csv = generateCsvContent(tasks)
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -117,9 +121,10 @@ export default function Home() {
             onEdit={setEditTask}
             onAddChild={handleAddChild}
             onRefresh={fetchTasks}
+            onReorder={handleReorder}
           />
         ) : (
-          <GanttView tasks={tasks} />
+          <GanttView tasks={tasks} onReorder={handleReorder} />
         )
       )}
 

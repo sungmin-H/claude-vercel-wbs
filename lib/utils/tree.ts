@@ -12,6 +12,12 @@ export function buildTree(tasks: Task[]): TaskNode[] {
       roots.push(node);
     }
   }
+
+  const byOrder = (a: TaskNode, b: TaskNode) =>
+    a.order - b.order || a.createdAt.localeCompare(b.createdAt);
+  roots.sort(byOrder);
+  for (const node of map.values()) node.children.sort(byOrder);
+
   return roots;
 }
 

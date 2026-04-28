@@ -23,6 +23,7 @@ export interface Task {
   progress: number;
   startDate: string | null;
   dueDate: string | null;
+  order: number;
   createdAt: string;
   updatedAt: string;
   deliverables?: Deliverable[];
