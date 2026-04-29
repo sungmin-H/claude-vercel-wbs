@@ -357,6 +357,43 @@ vercel --prod
 
 ---
 
+## MCP 로 호출하기
+
+이 앱은 사람용 웹 UI 와 별도로, AI 에이전트가 호출할 수 있는 **MCP(Model Context Protocol) 엔드포인트** 를 `/api/mcp` 에서 함께 제공합니다. Claude Code · Cursor · MCP Inspector 같은 클라이언트가 같은 Task 데이터를 직접 읽고 쓸 수 있습니다.
+
+### 활성화
+
+기본값에서 엔드포인트는 비활성화돼 있습니다(503 응답). 켜려면 환경변수 `MCP_PUBLIC_ENABLED=1` 을 설정하세요.
+
+- 로컬: `.env.local` 에 `MCP_PUBLIC_ENABLED=1` 추가 후 `npm run dev`
+- Vercel: 프로젝트 환경변수에 `MCP_PUBLIC_ENABLED=1` 등록 후 재배포
+
+### 제공 도구 (5개)
+
+| 이름 | 설명 |
+|---|---|
+| `list_tasks` | 모든 Task 를 평면 배열로 반환 (order asc, createdAt asc) |
+| `get_task` | `id` 로 단건 조회 |
+| `create_task` | 제목 필수, `parent_id` 지정 시 하위 작업으로 생성 |
+| `update_task` | 부분 업데이트. **progress=100 → status=done 자동 동기화** (역방향 없음) |
+| `delete_task` | 단건 삭제. 자식은 DB FK `on delete cascade` 로 함께 제거 |
+
+### 검증
+
+로컬:
+
+```bash
+npm run dev
+# 다른 터미널에서
+npx @modelcontextprotocol/inspector http://localhost:3000/api/mcp
+```
+
+배포된 URL 에서도 동일하게 동작합니다 (`https://<your>.vercel.app/api/mcp`). `.mcp.json` 의 `wbs-local` 항목을 본인 Vercel URL 로 바꾸면 Claude Code 안에서 바로 호출할 수 있습니다.
+
+인증·멀티 사용자·API key 는 MVP 범위 밖입니다 (`SPEC.md` 와 동일).
+
+---
+
 ## 라이선스
 
 교육 과제용 템플릿 — 자유롭게 복제·변경해서 사용하세요.
